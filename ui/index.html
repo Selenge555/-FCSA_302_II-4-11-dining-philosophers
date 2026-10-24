@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dining Philosophers — II-4-11</title>
+<style>
+  :root { --thinking:#4f8cff; --hungry:#ff9f1a; --eating:#2ecc71; --free:#8a949e;
+          --bg:#f4f6f8; --card:#fff; --ink:#1f2933; --muted:#667085; --line:#d9dee4; --bad:#d64545; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:12px 20px; background:#1f2933; color:#fff; display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:20px; }
+  header span { color:#b8c2cc; font-size:13px; }
+  main { display:grid; grid-template-columns: 290px minmax(360px, 1fr) 330px; gap:14px; padding:14px; align-items:start; }
+  @media (max-width: 1050px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .card h2 { margin:0 0 8px; font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  label { display:block; font-size:12px; color:var(--muted); margin-top:8px; }
+  input, select { width:100%; padding:6px 8px; font-size:14px; border:1px solid var(--line); border-radius:5px; }
+  input:disabled, select:disabled { background:#eef1f4; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+  button { padding:7px 12px; font-size:14px; border:1px solid var(--line); border-radius:5px; background:#fff; cursor:pointer; }
+  button:hover:not(:disabled) { background:#eef3ff; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+  button.primary:hover:not(:disabled) { background:#1d4fd8; }
+  button.danger { color:var(--bad); }
+  .presets button { font-size:12px; padding:4px 8px; }
+  #errors { color:var(--bad); font-size:13px; margin:8px 0 0; padding-left:18px; }
+  #errors:empty { display:none; }
+  svg { width:100%; max-width:520px; height:auto; display:block; margin:0 auto; }
+  #banner { text-align:center; min-height:26px; font-weight:600; margin-top:6px; }
+  #banner.bad { color:var(--bad); } #banner.ok { color:#1b7f46; }
+  #replay { display:flex; gap:6px; align-items:center; margin-top:10px; }
+  #replay input[type=range] { flex:1; padding:0; }
+  #tinfo { font-size:12px; color:var(--muted); min-width:92px; text-align:right; }
+  .legend { display:grid; gap:6px; font-size:13px; }
+  .legend i { display:inline-block; width:14px; height:14px; border-radius:50%; vertical-align:-2px; margin-right:6px; }
+  .legend .fk { display:inline-block; width:16px; height:0; border-top:4px solid; vertical-align:middle; margin-right:6px; }
+  #status { font-size:13px; margin-top:8px; color:var(--muted); }
+  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }
+  th, td { padding:3px 4px; border-bottom:1px solid var(--line); text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  #log { height:190px; overflow:auto; font:12px/1.5 ui-monospace, Consolas, monospace; background:#101820; color:#cfe3f1;
+         padding:8px; border-radius:6px; margin:0; white-space:pre; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Dining Philosophers</h1>
+  <span>F.CSM302 · БД1 · баг II-4-11 · Operating System Concepts, 7-р бүлэг</span>
+</header>
+
+<main>
+  <!-- ЗҮҮН: тохиргоо -->
+  <section class="card" id="panel">
+    <h2>Тохиргоо</h2>
+    <div class="presets">
+      <button type="button" data-preset="book">Сурах бичиг</button>
+      <button type="button" data-preset="fast">Хурдан demo</button>
+      <button type="button" data-preset="many">12 philosopher</button>
+      <button type="button" data-preset="deadlock">Deadlock demo</button>
+    </div>
+    <label for="algo">Алгоритм</label>
+    <select id="algo">
+      <option value="monitor">monitor (deadlock-гүй)</option>
+      <option value="naive">naive (зүүн → баруун fork)</option>
+    </select>
+    <label for="n">Philosopher-ийн тоо (2..64)</label>
+    <input id="n" type="number" value="5" min="2" max="64">
+    <div class="row2">
+      <div><label for="tmin">Бодох min (мс)</label><input id="tmin" type="number" value="1000" min="0"></div>
+      <div><label for="tmax">Бодох max (мс)</label><input id="tmax" type="number" value="3000" min="0"></div>
+      <div><label for="emin">Идэх min (мс)</label><input id="emin" type="number" value="1000" min="0"></div>
+      <div><label for="emax">Идэх max (мс)</label><input id="emax" type="number" value="3000" min="0"></div>
+      <div><label for="dur">Хугацаа (мс)</label><input id="dur" type="number" value="20000" min="100"></div>
+      <div><label for="seed">Seed</label><input id="seed" type="number" value="1" min="0"></div>
+    </div>
+    <label for="grab">Fork авах завсар, зөвхөн naive (мс)</label>
+    <input id="grab" type="number" value="100" min="0">
+    <div class="btns">
+      <button id="start" class="primary" type="button">▶ Эхлүүлэх</button>
+      <button id="stop" class="danger" type="button" disabled>■ Зогсоох</button>
+      <button id="reset" type="button">↺ Reset</button>
+    </div>
+    <ul id="errors" aria-live="polite"></ul>
+  </section>
+
+  <!-- ТӨВ: state diagram -->
+  <section class="card" id="stage">
+    <h2>State diagram</h2>
+    <svg id="table" viewBox="0 0 460 460" role="img" aria-label="Philosopher болон fork-ийн төлөв"></svg>
+    <div id="banner"></div>
+    <div id="replay">
+      <button id="prev" type="button" title="Өмнөх event" disabled>◀</button>
+      <input id="slider" type="range" min="0" max="0" value="0" disabled>
+      <button id="next" type="button" title="Дараагийн event" disabled>▶</button>
+      <button id="live" type="button" disabled>Live</button>
+      <span id="tinfo">t = 0 мс</span>
+    </div>
+  </section>
+
+  <!-- БАРУУН: legend, статистик, лог -->
+  <section>
+    <div class="card">
+      <h2>Тэмдэглэгээ (legend)</h2>
+      <div class="legend">
+        <div><i style="background:var(--thinking)"></i>thinking — бодож байна</div>
+        <div><i style="background:var(--hungry)"></i>hungry — fork хүлээж байна</div>
+        <div><i style="background:var(--eating)"></i>eating — хоёр fork-той, идэж байна</div>
+        <div><span class="fk" style="border-color:var(--free)"></span>fork чөлөөтэй (ширээн дээр)</div>
+        <div><span class="fk" style="border-color:var(--eating)"></span>fork-ыг эзэмшигчийн өнгөөр, түүн рүү ойртуулж зурна</div>
+        <div style="color:var(--muted)">Fork k нь P(k−1) ба Pk-ийн дунд. Pi нь fork i, (i+1)%n-ийг ашиглана.</div>
+      </div>
+      <div id="status">Бэлэн.</div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Статистик (ажиллагаа дууссаны дараа)</h2>
+      <table id="stats"><thead><tr><th>Phil</th><th>Хоол</th><th>Дундаж хүлээлт мс</th><th>Дээд хүлээлт мс</th><th title="Ажиллагаа дуусах мөчид philosopher ХЭВЭЭР hungry байсан бол хэдий хугацаа хүлээснийг харуулна (starvation илрүүлэх)">Дуусахад hungry (мс)</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Event лог</h2>
+      <pre id="log"></pre>
+    </div>
+  </section>
+</main>
+
+<script src="model.js"></script>
+<script>
+(function () {
+  'use strict';
+  var M = window.DPModel;
+  var $ = function (id) { return document.getElementById(id); };
+  var FIELDS = ['n', 'tmin', 'tmax', 'emin', 'emax', 'dur', 'seed', 'grab'];
+  var PRESETS = {
+    book:     { algo: 'monitor', n: 5,  tmin: 1000, tmax: 3000, emin: 1000, emax: 3000, dur: 20000, seed: 1, grab: 100 },
+    fast:     { algo: 'monitor', n: 5,  tmin: 150,  tmax: 500,  emin: 150,  emax: 500,  dur: 15000, seed: 1, grab: 100 },
+    many:     { algo: 'monitor', n: 12, tmin: 200,  tmax: 700,  emin: 200,  emax: 700,  dur: 15000, seed: 7, grab: 100 },
+    deadlock: { algo: 'naive',   n: 5,  tmin: 0,    tmax: 0,    emin: 300,  emax: 600,  dur: 8000,  seed: 1, grab: 300 }
+  };
+
+  var events = [], snaps = [], running = false, live = true, view = 0, ctrl = null, endEvent = null;
+  var renderQueued = false, curN = 5;
+
+  function readForm() {
+    var p = { algo: $('algo').value };
+    FIELDS.forEach(function (k) { p[k] = $(k).value; });
+    return p;
+  }
+  function writeForm(p) {
+    $('algo').value = p.algo;
+    FIELDS.forEach(function (k) { $(k).value = p[k]; });
+    syncGrab();
+  }
+  function syncGrab() { $('grab').disabled = running || $('algo').value !== 'naive'; }
+  function setInputsDisabled(d) {
+    FIELDS.concat(['algo']).forEach(function (k) { $(k).disabled = d; });
+    document.querySelectorAll('[data-preset]').forEach(function (b) { b.disabled = d; });
+    syncGrab();
+  }
+  function showErrors(list) {
+    var ul = $('errors'); ul.textContent = '';
+    list.forEach(function (m) { var li = document.createElement('li'); li.textContent = m; ul.appendChild(li); });
+  }
+
+  /* ---------- Зурах ---------- */
+  function svgEl(name, attrs, text) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', name);
+    Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function draw(snap) {
+    var n = snap.states.length, cx = 230, cy = 230, R = 175;
+    var svg = $('table'); while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.appendChild(svgEl('circle', { cx: cx, cy: cy, r: 118, fill: '#efe3cc', stroke: '#cdb98e', 'stroke-width': 2 }));
+    var pr = M.philRadius(n, R);
+
+    /* fork */
+    for (var k = 0; k < n; k++) {
+      var owner = snap.forks[k];
+      var fp = M.forkPos(k, owner, n, cx, cy, 92, 142);
+      var color = owner < 0 ? M.COLORS.free : M.COLORS[snap.states[owner]];
+      var len = Math.max(8, Math.min(22, 120 * Math.sin(Math.PI / n) * 0.5));
+      var dx = Math.cos(fp.angle) * len / 2, dy = Math.sin(fp.angle) * len / 2;
+      var line = svgEl('line', { x1: fp.x - dx, y1: fp.y - dy, x2: fp.x + dx, y2: fp.y + dy,
+        stroke: color, 'stroke-width': owner < 0 ? 4 : 6, 'stroke-linecap': 'round' });
+      line.appendChild(svgEl('title', {}, 'fork ' + k + (owner < 0 ? ': чөлөөтэй' : ': P' + owner + ' барьсан')));
+      svg.appendChild(line);
+    }
+    /* philosopher */
+    for (var i = 0; i < n; i++) {
+      var pp = M.philPos(i, n, cx, cy, R), st = snap.states[i];
+      var c = svgEl('circle', { cx: pp.x, cy: pp.y, r: pr, fill: M.COLORS[st],
+        stroke: snap.deadlock ? '#d64545' : '#1f2933', 'stroke-width': snap.deadlock ? 4 : 2 });
+      c.appendChild(svgEl('title', {}, 'P' + i + ': ' + st));
+      svg.appendChild(c);
+      if (pr >= 13) {
+        svg.appendChild(svgEl('text', { x: pp.x, y: pp.y + 1, 'text-anchor': 'middle', 'font-size': Math.min(15, pr * 0.62),
+          'font-weight': 700, fill: '#fff', 'dominant-baseline': 'middle' }, 'P' + i));
+      }
+    }
+    var b = $('banner');
+    if (snap.deadlock) { b.className = 'bad'; b.textContent = 'DEADLOCK — бүх philosopher зүүн fork-оо барьж, баруун fork-оо хүлээж байна'; }
+    else if (snap.ended) { b.className = 'ok'; b.textContent = 'Ажиллагаа дууссан (' + snap.reason + ')'; }
+    else { b.className = ''; b.textContent = running ? 'Ажиллаж байна…' : ''; }
+    $('tinfo').textContent = 't = ' + snap.t + ' мс';
+  }
+
+  function renderLog(upto) {
+    var from = Math.max(0, upto - 60), lines = [];
+    for (var i = from; i < upto && i < events.length; i++) lines.push(M.describeEvent(events[i]));
+    var el = $('log'); el.textContent = lines.join('\n'); el.scrollTop = el.scrollHeight;
+  }
+  function renderStats() {
+    var tb = $('stats').tBodies[0]; tb.textContent = '';
+    if (!endEvent) return;
+    M.statsRows(endEvent).forEach(function (r) {
+      var tr = document.createElement('tr');
+      [ 'P' + r.id, r.meals, r.avg, r.max, r.final ].forEach(function (v) {
+        var td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+  }
+  function updateControls() {
+    var s = $('slider'), has = snaps.length > 1;
+    s.max = Math.max(0, snaps.length - 1);
+    s.value = live ? s.max : view;
+    s.disabled = !has;
+    $('prev').disabled = !has || (!live && view <= 0);
+    $('next').disabled = !has || live || view >= snaps.length - 1;
+    $('live').disabled = !has || live;
+  }
+  function render() {
+    renderQueued = false;
+    var idx = live ? snaps.length - 1 : view;
+    draw(snaps[idx] || M.emptySnapshot(curN));
+    renderLog(idx);   /* snaps[i] = i event-ийн дараах төлөв */
+    updateControls();
+  }
+  function scheduleRender() {
+    if (!renderQueued) { renderQueued = true; requestAnimationFrame(render); }
+  }
+
+  /* ---------- Ажиллагаа ---------- */
+  function resetView(n) {
+    events = []; endEvent = null; curN = n; snaps = [M.emptySnapshot(n)]; live = true; view = 0;
+    renderStats(); scheduleRender();
+  }
+  function setRunning(r) {
+    running = r; setInputsDisabled(r);
+    $('start').disabled = r; $('stop').disabled = !r;
+  }
+  function finish(msg) {
+    setRunning(false); ctrl = null;
+    $('status').textContent = msg || 'Дууссан.';
+    scheduleRender();
+  }
+  function handleLine(line) {
+    var ev; try { ev = JSON.parse(line); } catch (e) { return; }
+    if (ev.type === 'exit') {
+      if (ev.code === 2 && ev.stderr) showErrors([ev.stderr]);
+      return;
+    }
+    events.push(ev);
+    snaps.push(M.applyEvent(snaps[snaps.length - 1], ev));
+    if (ev.type === 'end') { endEvent = ev; renderStats(); }
+    scheduleRender();
+  }
+  function start() {
+    var v = M.validateParams(readForm());
+    showErrors(v.errors);
+    if (!v.ok) return;
+    resetView(v.params.n);
+    setRunning(true);
+    $('status').textContent = 'Ажиллаж байна…';
+    ctrl = new AbortController();
+    fetch('/run?' + M.toQuery(v.params), { signal: ctrl.signal }).then(function (res) {
+      if (!res.ok) {
+        return res.json().catch(function () { return { errors: ['Серверийн алдаа ' + res.status] }; })
+          .then(function (j) { showErrors(j.errors || ['Серверийн алдаа']); });
+      }
+      var reader = res.body.getReader(), dec = new TextDecoder(), buf = '';
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) return;
+          buf += dec.decode(r.value, { stream: true });
+          var i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            var line = buf.slice(0, i); buf = buf.slice(i + 1);
+            if (line.trim()) handleLine(line);
+          }
+          return pump();
+        });
+      }
+      return pump();
+    }).then(function () {
+      finish(endEvent ? 'Дууссан. Replay ашиглан event бүрийг алхамчилж харж болно.' : 'Зогссон.');
+    }).catch(function (e) {
+      if (e.name !== 'AbortError') showErrors(['Серверт холбогдож чадсангүй: ' + e.message + ' (ui/server.py ажиллаж байна уу?)']);
+      finish(e.name === 'AbortError' ? 'Хэрэглэгч зогсоосон.' : 'Алдаа гарлаа.');
+    });
+  }
+  function stop() { if (ctrl) ctrl.abort(); }
+  function reset() {
+    stop(); showErrors([]);
+    var n = parseInt($('n').value, 10);
+    resetView(n >= 2 && n <= 64 ? n : 5);
+    $('status').textContent = 'Бэлэн.';
+  }
+
+  /* ---------- Үйл явдлууд ---------- */
+  $('start').onclick = start;
+  $('stop').onclick = stop;
+  $('reset').onclick = reset;
+  $('algo').onchange = syncGrab;
+  $('n').oninput = function () {            /* тохиргоо өөрчлөхөд ширээ шууд шинэчлэгдэнэ */
+    var n = parseInt($('n').value, 10);
+    if (!running && n >= 2 && n <= 64) { resetView(n); }
+  };
+  $('slider').oninput = function () { live = false; view = parseInt($('slider').value, 10); scheduleRender(); };
+  $('prev').onclick = function () { if (live) { view = snaps.length - 1; live = false; } view = Math.max(0, view - 1); scheduleRender(); };
+  $('next').onclick = function () { view = Math.min(snaps.length - 1, view + 1); scheduleRender(); };
+  $('live').onclick = function () { live = true; scheduleRender(); };
+  document.querySelectorAll('[data-preset]').forEach(function (b) {
+    b.onclick = function () { writeForm(PRESETS[b.getAttribute('data-preset')]); showErrors([]); resetView(PRESETS[b.getAttribute('data-preset')].n); };
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowLeft') $('prev').click(); else if (e.key === 'ArrowRight') $('next').click();
+  });
+
+  writeForm(PRESETS.book);
+  resetView(5);
+})();
+</script>
+</body>
+</html>
