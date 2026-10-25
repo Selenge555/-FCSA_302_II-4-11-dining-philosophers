@@ -6,3 +6,6 @@ build/
 # OS / editor cruft
 .DS_Store
 *.swp
+*:Zone.Identifier
+*:Zone.Identifier
+*:Zone.Identifier
