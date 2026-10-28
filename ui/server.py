@@ -8,7 +8,8 @@ server.py -- Dining-Philosophers UI сервер (зөвхөн Python станд
                       урсгана. Төгсгөлд {"type":"exit","code":N,"stderr":"..."}.
   GET /health      -> ok
 
-Аюулгүй байдал: зөвхөн 127.0.0.1-д холбогдоно; параметрийг бүхэл тоо болгож
+Аюулгүй байдал: зөвхөн 127.0.0.1-д холбогдоно; /run нь Host/Origin толгойг
+шалгана (DNS rebinding болон өөр сайтаас процесс эхлүүлэхээс хамгаална); параметрийг бүхэл тоо болгож
 хязгаарт шалгана; subprocess-д shell ашиглахгүй (жагсаалт хэлбэрээр дамжуулна);
 нэгэн зэрэг ажиллах тоо хязгаартай; ажиллагаа хугацаанаас хэтэрвэл process-ийг
 албадан зогсооно.
@@ -16,12 +17,18 @@ server.py -- Dining-Philosophers UI сервер (зөвхөн Python станд
 import argparse
 import json
 import os
+import queue
 import re
 import subprocess
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+
+# Клиент холболтоо тасалсныг урьдчилан илрүүлэх зорилгоор, dp-ийн event
+# гарч ирэхийг хүлээлгүйгээр энэ зайгаар "ping" мөр бичиж үзнэ (write эвдрэх
+# үед client тасарсныг мэднэ). model.js "ping" төрлийг үл тоож орхино.
+PING_INTERVAL_S = 1.0
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN = os.path.join(ROOT, "build", "dp")
@@ -45,6 +52,7 @@ INT_PARAMS = [
     ("grab", "--grab-delay", 0, 10000, "Fork авах завсар"),
 ]
 MAX_CONCURRENT = 4
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1"}
 slots = threading.BoundedSemaphore(MAX_CONCURRENT)
 
 
@@ -89,6 +97,31 @@ class Handler(BaseHTTPRequestHandler):
         if not getattr(self.server, "quiet", False):
             sys.stderr.write("[ui] " + fmt % args + "\n")
 
+    def _host_of(self, value):
+        """'host:port' -> 'host' (IPv6 '[::1]:8000' -> '[::1]')."""
+        value = (value or "").strip().lower()
+        if value.startswith("["):
+            return value.split("]")[0] + "]"
+        return value.split(":")[0]
+
+    def _origin_ok(self):
+        """Host нь loopback (эсвэл --host-оор өгсөн хаяг) байх ёстой; Origin
+        толгой байвал мөн тэр хостынх, Host-той ижил байх ёстой. Хөтөч
+        өөр сайтаас fetch хийвэл Origin заавал илгээдэг тул хориглогдоно."""
+        allowed = set(LOOPBACK_HOSTS)
+        bind = getattr(self.server, "bind_host", "")
+        if bind and bind not in ("0.0.0.0", "::"):
+            allowed.add(bind.lower())
+        host = self._host_of(self.headers.get("Host"))
+        if host not in allowed:
+            return False
+        origin = self.headers.get("Origin")
+        if origin:
+            from urllib.parse import urlparse as _up
+            if self._host_of(_up(origin).netloc) != host:
+                return False
+        return True
+
     def _send(self, code, body, ctype):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(code)
@@ -120,6 +153,8 @@ class Handler(BaseHTTPRequestHandler):
                 pass
 
     def _run(self, query):
+        if not self._origin_ok():
+            return self._send(403, json.dumps({"errors": ["Host/Origin зөвшөөрөгдөөгүй"]}), "application/json")
         if not os.path.exists(BIN):
             return self._send(500, json.dumps({"errors": ["build/dp олдсонгүй. Эхлээд 'make' ажиллуулна уу."]}),
                               "application/json")
@@ -131,6 +166,7 @@ class Handler(BaseHTTPRequestHandler):
                               "application/json")
         proc = None
         timer = None
+        reader_thread = None
         try:
             proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                     text=True, bufsize=1)
@@ -140,9 +176,44 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
-            for line in proc.stdout:
+
+            # dp-ийн stdout-ыг тусдаа thread-ээр уншиж queue-д хийнэ. Ингэснээр
+            # гол thread нь "think" хугацаа урт (event гарахгүй) үед ч
+            # periodic ping бичиж, клиент холболтоо тасалсныг (wfile.write
+            # BrokenPipe шиднэ) ШУУД (proc.stdout-оос дараагийн event гарахыг
+            # хүлээлгүйгээр) илрүүлнэ. Өмнө нь "for line in proc.stdout" гэж
+            # шууд уншсан тул думгар (think) хугацаанд disconnect илрэхгүй,
+            # proc нь dur+10 секунд хүртэл амьд үлдэж slot-ыг эзэлсээр байсан
+            # (4 удаагийн Start/Stop дараа 5 дахь хүсэлт 429 авдаг байсан).
+            q = queue.Queue()
+
+            def _reader():
+                try:
+                    for line in proc.stdout:
+                        q.put(line)
+                finally:
+                    q.put(None)  # EOF тэмдэглэгээ
+
+            reader_thread = threading.Thread(target=_reader, daemon=True)
+            reader_thread.start()
+
+            eof = False
+            while not eof:
+                try:
+                    line = q.get(timeout=PING_INTERVAL_S)
+                except queue.Empty:
+                    # Урт хугацаанд event гараагүй үед клиент амьд эсэхийг
+                    # шалгахын тулд хөнгөн ping мөр бичнэ. Хэрэв клиент
+                    # tab-аа хаасан/Stop дарсан бол энд BrokenPipe шиднэ.
+                    self.wfile.write(b'{"type":"ping"}\n')
+                    self.wfile.flush()
+                    continue
+                if line is None:
+                    eof = True
+                    break
                 self.wfile.write(line.encode("utf-8"))
                 self.wfile.flush()
+
             proc.wait()
             err = proc.stderr.read().strip()
             tail = json.dumps({"type": "exit", "code": proc.returncode, "stderr": err},
@@ -150,14 +221,16 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(tail.encode("utf-8"))
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
-            pass  # хэрэглэгч Stop дарсан эсвэл tab хаасан
+            pass  # хэрэглэгч Stop дарсан эсвэл tab хаасан -> доор нэн даруй kill хийнэ
         finally:
             if timer:
                 timer.cancel()
             if proc and proc.poll() is None:
-                proc.kill()
+                proc.kill()  # Stop дарсан даруйд (дараагийн ping/event-ийг хүлээлгүй) процессыг зогсооно
             if proc:
                 proc.wait()
+            if reader_thread:
+                reader_thread.join(timeout=2)
             slots.release()
 
 
@@ -169,6 +242,7 @@ def main():
     a = ap.parse_args()
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     srv.quiet = a.quiet
+    srv.bind_host = a.host
     srv.daemon_threads = True
     print(f"Dining-Philosophers UI: http://{a.host}:{srv.server_address[1]}/  (зогсоох: Ctrl+C)",
           flush=True)

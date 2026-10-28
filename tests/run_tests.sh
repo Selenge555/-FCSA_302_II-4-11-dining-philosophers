@@ -89,6 +89,38 @@ if curl -fs http://127.0.0.1:8123/health > /dev/null 2>&1; then
 else
   fail "сервер буруу оролтын дараа унасан"
 fi
+# Host/Origin шалгалт: DNS rebinding эсвэл өөр сайтаас /run дуудахыг хаана.
+q="n=4&tmin=5&tmax=15&emin=5&emax=15&dur=300&seed=1&algo=monitor&grab=50"
+h1=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: evil.example:8123" "http://127.0.0.1:8123/run?$q")
+h2=$(curl -s -o /dev/null -w "%{http_code}" -H "Origin: http://evil.example" "http://127.0.0.1:8123/run?$q")
+h3=$(curl -s -o /dev/null -w "%{http_code}" -H "Origin: http://127.0.0.1:8123" "http://127.0.0.1:8123/run?$q")
+if [ "$h1" = "403" ] && [ "$h2" = "403" ] && [ "$h3" = "200" ]; then
+  pass "сервер: гадны Host/Origin-той /run 403, өөрийн Origin 200"
+else
+  fail "сервер: Host/Origin шалгалт буруу (evil-host=$h1 evil-origin=$h2 own-origin=$h3)"
+fi
+# Regression: Stop (клиент холболтоо таслах) дарсан ч dp процесс зогсдоггүй
+# алдаа байсан (гадаад шүүмж, 2026-10). "for line in proc.stdout" нь зөвхөн
+# дараагийн event гарахад л disconnect-ийг мэддэг байсан тул think хугацаа
+# урт үед proc нь dur+10 сек хүртэл амьд үлдэж, MAX_CONCURRENT(=4) slot
+# дүүрч, 5 дахь хүсэлт 429 авдаг байсан. Яг энэ репродукцийг давтана:
+# 4 удаа (урт think-тэй) холболтыг 1 секундийн дараа тасалж, тав дахь бодит
+# хүсэлт 429 АВАХГҮЙ байхыг шалгана.
+for i in 1 2 3 4; do
+  curl -s --max-time 1 "http://127.0.0.1:8123/run?n=5&tmin=60000&tmax=60000&emin=1000&emax=1000&dur=600000&seed=1&algo=monitor&grab=100" > /dev/null 2>&1
+  sleep 1.3
+done
+rc5=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "http://127.0.0.1:8123/run?n=4&tmin=5&tmax=15&emin=5&emax=15&dur=200&seed=1&algo=monitor&grab=50")
+if [ "$rc5" = "200" ]; then
+  pass "сервер: Stop (холболт тасрах) дараа slot чөлөөлөгдөж, 5 дахь хүсэлт 429 авахгүй"
+else
+  fail "сервер: 4 удаагийн disconnect-ийн дараа 5 дахь хүсэлт HTTP $rc5 авлаа (429 эсвэл slot leak)"
+fi
+if ! pgrep -f "build/dp " > /dev/null 2>&1; then
+  pass "сервер: disconnect хийсэн dp процессууд бүгд зогссон (leak байхгүй)"
+else
+  fail "сервер: disconnect хийсний дараа ч dp процесс амьд үлдлээ"
+fi
 kill "$SV" 2>/dev/null
 wait "$SV" 2>/dev/null
 

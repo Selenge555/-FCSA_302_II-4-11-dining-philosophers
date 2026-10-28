@@ -5,55 +5,208 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dining Philosophers — II-4-11</title>
 <style>
-  :root { --thinking:#4f8cff; --hungry:#ff9f1a; --eating:#2ecc71; --free:#8a949e;
-          --bg:#f4f6f8; --card:#fff; --ink:#1f2933; --muted:#667085; --line:#d9dee4; --bad:#d64545; }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
-  header { padding:12px 20px; background:#1f2933; color:#fff; display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; }
-  header h1 { margin:0; font-size:20px; }
-  header span { color:#b8c2cc; font-size:13px; }
-  main { display:grid; grid-template-columns: 290px minmax(360px, 1fr) 330px; gap:14px; padding:14px; align-items:start; }
-  @media (max-width: 1050px) { main { grid-template-columns: 1fr; } }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
-  .card h2 { margin:0 0 8px; font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
-  label { display:block; font-size:12px; color:var(--muted); margin-top:8px; }
-  input, select { width:100%; padding:6px 8px; font-size:14px; border:1px solid var(--line); border-radius:5px; }
-  input:disabled, select:disabled { background:#eef1f4; }
-  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  .btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
-  button { padding:7px 12px; font-size:14px; border:1px solid var(--line); border-radius:5px; background:#fff; cursor:pointer; }
-  button:hover:not(:disabled) { background:#eef3ff; }
-  button:disabled { opacity:.45; cursor:not-allowed; }
-  button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
-  button.primary:hover:not(:disabled) { background:#1d4fd8; }
-  button.danger { color:var(--bad); }
-  .presets button { font-size:12px; padding:4px 8px; }
-  #errors { color:var(--bad); font-size:13px; margin:8px 0 0; padding-left:18px; }
-  #errors:empty { display:none; }
-  svg { width:100%; max-width:520px; height:auto; display:block; margin:0 auto; }
-  #banner { text-align:center; min-height:26px; font-weight:600; margin-top:6px; }
-  #banner.bad { color:var(--bad); } #banner.ok { color:#1b7f46; }
-  #replay { display:flex; gap:6px; align-items:center; margin-top:10px; }
-  #replay input[type=range] { flex:1; padding:0; }
-  #tinfo { font-size:12px; color:var(--muted); min-width:92px; text-align:right; }
-  .legend { display:grid; gap:6px; font-size:13px; }
-  .legend i { display:inline-block; width:14px; height:14px; border-radius:50%; vertical-align:-2px; margin-right:6px; }
-  .legend .fk { display:inline-block; width:16px; height:0; border-top:4px solid; vertical-align:middle; margin-right:6px; }
-  #status { font-size:13px; margin-top:8px; color:var(--muted); }
-  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }
-  th, td { padding:3px 4px; border-bottom:1px solid var(--line); text-align:right; }
-  th:first-child, td:first-child { text-align:left; }
-  #log { height:190px; overflow:auto; font:12px/1.5 ui-monospace, Consolas, monospace; background:#101820; color:#cfe3f1;
-         padding:8px; border-radius:6px; margin:0; white-space:pre; }
+:root{
+  --bg:#f3f5f9; --surface:#ffffff; --ink:#131a24; --muted:#586475; --line:#dbe1e9;
+  --accent:#2b3f8c; --accent-ink:#ffffff; --accent-soft:#e6eaf7;
+  --think:#4a86f0; --hungry:#e8960c; --eat:#1fa866; --bad:#d83a3a;
+  --table:#ece2cc; --table-edge:#d3c196; --table-in:#e3d6b8; --plate:#ffffff; --plate-edge:#cdd5df; --plate-in:#f4f6f9; --fork:#8a95a3; --food:#d9822b;
+  --font:system-ui,"Segoe UI",Roboto,sans-serif; --mono:ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--font);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+.wrap{max-width:1120px;margin:0 auto}
+button,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+/* top: brand + step tabs */
+header{padding-block:18px 8px}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand b{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.brand span{color:var(--muted);font-size:14px}
+.tabs{display:flex;gap:6px;margin:14px 0 0;padding:0;list-style:none;overflow-x:auto}
+.tabs button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer;color:var(--muted)}
+.tabs button[aria-current="step"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tabs button.done{color:var(--ink)}
+.tabs i{font-style:normal;font-variant-numeric:tabular-nums;margin-right:6px;opacity:.75}
+
+/* screen */
+.screen{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:32px;align-items:start;padding-block:22px 12px}
+@media (max-width:520px){nav.bottom .btn{padding:9px 12px}nav.bottom .where{font-size:12px}}
+@media (max-width:860px){.screen{grid-template-columns:minmax(0,1fr);gap:16px}}
+.copy h1{margin:0 0 12px;font-size:clamp(26px,4vw,36px);line-height:1.12;font-weight:800;letter-spacing:-.02em;text-wrap:balance}
+.copy p{margin:0 0 14px;max-width:62ch}
+.copy .lead{font-size:18px;color:var(--ink)}
+.copy h2{margin:22px 0 6px;font-size:15px;font-weight:700}
+.muted{color:var(--muted)}
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 12px 14px;min-width:0}
+.stage svg{display:block;width:100%;max-width:470px;margin:0 auto;height:auto}
+.banner{min-height:26px;text-align:center;font-weight:700;margin:2px 0 0}
+.banner.bad{color:var(--bad)}
+
+/* table drawing */
+.t-table{fill:var(--table);stroke:var(--table-edge);stroke-width:3}
+.t-inner{fill:var(--table-in);opacity:.7}
+.t-plate{fill:var(--plate);stroke:var(--plate-edge);stroke-width:2}
+.t-plate2{fill:var(--plate-in)}
+.food circle{fill:var(--food)}
+.food{transition:opacity .3s ease}
+.fork{transition:transform .5s cubic-bezier(.3,.7,.2,1)}
+.fork path{fill:none;stroke-linecap:round;transition:stroke .3s ease}
+.phil{cursor:default}
+.phil.click{cursor:pointer}
+.phil .body{stroke:var(--ink);stroke-width:2.5;transition:fill .3s ease,stroke .3s ease}
+.phil text{fill:#fff;font-weight:800;font-family:var(--font);text-anchor:middle;pointer-events:none}
+.ring{fill:none;stroke-width:3;opacity:0;transition:opacity .3s ease;transform-box:fill-box;transform-origin:center}
+.ring.eat{opacity:.45}
+.ring.hun{animation:pulse 1.6s ease-out infinite}
+@keyframes pulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(1.32)}}
+.bubble{transition:opacity .3s ease;opacity:0}
+.bubble circle{fill:var(--accent-soft)}
+.bubble text{fill:var(--accent);font-weight:800;font-size:13px}
+.arrows path{fill:none;stroke:var(--bad);stroke-width:3.4;stroke-dasharray:8 6}
+.arrows,.cw{transition:opacity .4s ease;opacity:0}
+.cw text{text-anchor:middle;font-family:var(--font)}
+@media (prefers-reduced-motion:reduce){.fork,.food,.phil .body,.ring,.bubble,.arrows,.cw{transition:none}.ring.hun{animation:none;opacity:.4}}
+
+/* legend + chips */
+.legend{display:flex;gap:6px 18px;flex-wrap:wrap;justify-content:center;font-size:14px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.facts{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 0;padding:0;list-style:none}
+.facts li{background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:5px 12px;font-size:14px;font-weight:600}
+
+/* state flow (screen 2) */
+.flow{display:grid;gap:8px;margin:0 0 16px;padding:0;list-style:none}
+.flow li{display:grid;grid-template-columns:14px 1fr;gap:10px;align-items:start}
+.flow i{width:14px;height:14px;border-radius:50%;margin-top:6px}
+.flow b{font-weight:700}
+.rule{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;margin:0 0 14px}
+.rule b{display:block;margin-bottom:2px}
+.msg{min-height:48px;margin:0 0 10px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--ink);font-size:15px}
+.msg.bad{background:color-mix(in srgb,var(--bad) 14%,var(--surface))}
+
+/* deadlock steps */
+.steptext{min-height:96px;border-left:4px solid var(--accent);padding:6px 0 6px 14px;margin:0 0 14px;font-size:17px}
+.conds{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.conds li{display:flex;gap:10px;align-items:baseline;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:15px}
+.conds li.hit{border-color:var(--bad)}
+.conds li b{min-width:0}
+.conds em{font-style:normal;color:var(--muted);font-size:13px}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.btn{white-space:nowrap;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 16px;font-weight:600;cursor:pointer}
+.btn.p{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.fld{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:14px}
+.fld select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--ink)}
+code,.mono{font-family:var(--mono);font-size:.9em}
+pre.code{margin:0 0 14px;padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--line);overflow-x:auto;font:13.5px/1.6 var(--mono);color:var(--ink)}
+
+/* sim side panel */
+.panel{display:grid;gap:10px;margin-top:12px}
+.meals{display:grid;gap:5px}
+.meals .r{display:grid;grid-template-columns:28px 1fr 64px;gap:8px;align-items:center;font-size:13px}
+.meals .r b{font-weight:700}
+.meals .bar{height:10px;border-radius:5px;background:var(--bg);overflow:hidden}
+.meals .bar span{display:block;height:100%;background:var(--eat);border-radius:5px;transition:width .3s ease;width:0}
+.meals .v{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.log{font:12.5px/1.65 var(--mono);background:#101923;color:#d2e2f0;border-radius:10px;padding:9px 12px;height:128px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.log div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note{font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;margin-top:18px}
+
+/* bottom nav */
+nav.bottom{position:fixed;left:0;right:0;bottom:0;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(8px);border-top:1px solid var(--line);
+  padding-block:12px calc(12px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+nav.bottom .in{max-width:1120px;margin:0 auto;display:flex;align-items:center;gap:12px}
+nav.bottom .where{flex:1;text-align:center;color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+.screen.wide{display:block}
+.screen.wide #real{min-width:0}
+/* ---------- Бодит туршилтын дэлгэц (өмнөх UI-ийн хэв, #real дотор тусгаарласан) ---------- */
+  #real .rgrid { display:grid; grid-template-columns: 290px minmax(380px, 1fr) 330px; gap:14px; padding:6px 0 8px; align-items:start; }
+  @media (max-width: 1050px) { #real .rgrid { grid-template-columns: 1fr; } }
+  #real .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  #real .card h2 { margin:0 0 8px; font-size:13px; font-weight:700; color:var(--muted); }
+  #real label { display:block; font-size:12px; color:var(--muted); margin-top:8px; }
+  #real input, #real select { width:100%; padding:6px 8px; font-size:14px; border:1px solid var(--line); border-radius:5px; }
+  #real input:disabled, #real select:disabled { background:#eef1f4; }
+  #real .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  #real .btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+  #real button { padding:7px 12px; font-size:14px; border:1px solid var(--line); border-radius:5px; background:#fff; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+  #real button:hover:not(:disabled) { background:var(--accent-soft); }
+  #real button:disabled { opacity:.45; cursor:not-allowed; }
+  #real button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #real button.primary:hover:not(:disabled) { background:#1b2c54; }
+  #real button.danger { color:var(--bad); }
+  #real .presets button { font-size:12px; padding:4px 8px; }
+  #real #errors { color:var(--bad); font-size:13px; margin:8px 0 0; padding-left:18px; }
+  #real #errors:empty { display:none; }
+
+  /* ---------- Төв диаграм: гол focal point ---------- */
+  #real #stage { text-align:center; }
+  #real #stage h2 { text-align:left; }
+  #real #stage .sub { text-align:left; font-size:13px; color:var(--muted); margin:-4px 0 10px; }
+  #real svg { width:100%; max-width:540px; height:auto; display:block; margin:4px auto 0; }
+  #real svg circle { transition: cx .32s ease, cy .32s ease, fill .28s ease, stroke .28s ease, stroke-width .28s ease; }
+  /* fork-ийн line нь x1/y1/x2/y2-ээ ТОГТМОЛ (local координат) барина; зөвхөн
+   * эзэмшлийн өнгө/зузаан нь шилждэг тул л эндээс transition хэрэгтэй.
+   * Байрлал/эргэлтийг доорх .forkg дээрх transform (CSS-ээр найдвартай
+   * animate хийгддэг цорын ганц SVG геометрийн шинж чанар) даана —
+   * x1/y1/x2/y2 дээр шууд transition тавихад зарим хөтөч дээр ажилладаггүй
+   * (instant "үсрэлт") болохыг бодит хэмжилтээр баталгаажуулсан. */
+  #real svg line { transition: stroke .28s ease, stroke-width .28s ease; }
+  #real svg .forkg { transition: transform .32s ease; }
+  #real svg text { transition: x .32s ease, y .32s ease; }
+  #real #banner { text-align:center; min-height:26px; font-weight:700; margin-top:8px; transition:color .2s ease; }
+  #real #banner.bad { color:var(--bad); } #real #banner.ok { color:#1b7f46; }
+  #real #replay { display:flex; gap:6px; align-items:center; margin-top:10px; }
+  #real #replay input[type=range] { flex:1; padding:0; }
+  #real #tinfo { font-size:12px; color:var(--muted); min-width:92px; text-align:right; font-variant-numeric: tabular-nums; }
+  #real .klegend { display:grid; gap:6px; font-size:13px; }
+  #real .klegend i { display:inline-block; width:14px; height:14px; border-radius:50%; vertical-align:-2px; margin-right:6px; }
+  #real .klegend .fk { display:inline-block; width:16px; height:0; border-top:4px solid; vertical-align:middle; margin-right:6px; }
+  #real #status { font-size:13px; margin-top:8px; color:var(--muted); }
+  #real table { width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }
+  #real th, #real td { padding:3px 4px; border-bottom:1px solid var(--line); text-align:right; }
+  #real th:first-child, #real td:first-child { text-align:left; }
+  #real #log { height:190px; overflow:auto; font:12px/1.5 ui-monospace, Consolas, monospace; background:#101820; color:#cfe3f1;
+         padding:8px; border-radius:6px; margin:0; white-space:pre-wrap; word-break:break-word; }
+  @media (prefers-reduced-motion: reduce) {
+    #real svg circle, #real svg line, #real svg .forkg, #real svg text, #real #banner, #real #livepulse .dot { transition:none !important; }
+  }
+
+  #real { --thinking:#4f8cff; --hungry:#ff9f1a; --eating:#2ecc71; --free:#8a949e; --card:#fff; }
+  #real .rintro { margin:0 0 14px; max-width:80ch; color:var(--muted); font-size:15px; }
+  #real .rhead { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  #real #livepulse { display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--muted);
+               border:1px solid var(--line); border-radius:999px; padding:4px 12px; white-space:nowrap; }
+  #real #livepulse b { color:var(--ink); }
+  #real #livepulse .dot { width:9px; height:9px; border-radius:50%; background:var(--free); transition:background .3s ease; }
+  #real #livepulse.running .dot { background:var(--eating); box-shadow:0 0 0 3px rgba(46,204,113,.25); }
+  #real .card { box-shadow:none; }
+  #real button { font-family:inherit; }
+  #real button:not(.primary):not(.danger) { color:var(--ink); }
+
 </style>
 </head>
 <body>
-<header>
-  <h1>Dining Philosophers</h1>
-  <span>F.CSM302 · БД1 · баг II-4-11 · Operating System Concepts, 7-р бүлэг</span>
-</header>
+<div class="wrap">
+  <header>
+    <div class="brand"><b>Dining Philosophers</b><span>F.CSM302 · БД1 · баг II-4-11 · Operating System Concepts, 7-р бүлэг</span></div>
+    <ol class="tabs" id="tabs"></ol>
+  </header>
+  <main id="screen" class="screen" aria-live="polite"></main>
+</div>
+<nav class="bottom"><div class="in">
+  <button class="btn" id="navback">← Буцах</button>
+  <span class="where" id="navwhere"></span>
+  <button class="btn p" id="navnext">Дараагийн →</button>
+</div></nav>
 
-<main>
+<template id="tpl-real">
+<div id="real">
+<p class="rintro"><b>Жинхэнэ программ.</b> Энд C/pthread программ (<code>build/dp</code>) ажиллаж, төлөв бүрийг JSON event болгон ширээнд урсгана. <b>monitor</b>-ыг сонговол deadlock үүсэхгүй, <b>naive</b>-ыг (&ldquo;Deadlock demo&rdquo; товч) сонговол өмнөх хэсэгт үзсэн deadlock бодитоор үүснэ.</p>
+<div class="rgrid">
   <!-- ЗҮҮН: тохиргоо -->
   <section class="card" id="panel">
     <h2>Тохиргоо</h2>
@@ -88,9 +241,10 @@
     <ul id="errors" aria-live="polite"></ul>
   </section>
 
-  <!-- ТӨВ: state diagram -->
+  <!-- ТӨВ: state diagram (гол focal point) -->
   <section class="card" id="stage">
-    <h2>State diagram</h2>
+    <h2 class="rhead"><span>Ширээ — philosopher ба fork-ийн төлөв (real-time)</span><span id="livepulse"><span class="dot"></span><b id="pulsetxt">Зогссон</b></span></h2>
+    <div class="sub">Өнгө: <b style="color:var(--thinking)">бодож байна</b> → <b style="color:var(--hungry)">fork хүлээж байна</b> → <b style="color:var(--eating)">идэж байна</b></div>
     <svg id="table" viewBox="0 0 460 460" role="img" aria-label="Philosopher болон fork-ийн төлөв"></svg>
     <div id="banner"></div>
     <div id="replay">
@@ -106,7 +260,7 @@
   <section>
     <div class="card">
       <h2>Тэмдэглэгээ (legend)</h2>
-      <div class="legend">
+      <div class="klegend">
         <div><i style="background:var(--thinking)"></i>thinking — бодож байна</div>
         <div><i style="background:var(--hungry)"></i>hungry — fork хүлээж байна</div>
         <div><i style="background:var(--eating)"></i>eating — хоёр fork-той, идэж байна</div>
@@ -125,12 +279,15 @@
       <pre id="log"></pre>
     </div>
   </section>
-</main>
+</div>
+</div>
+</template>
 
 <script src="model.js"></script>
 <script>
-(function () {
+function mountReal(root) {
   'use strict';
+  root.appendChild(document.getElementById('tpl-real').content.cloneNode(true));
   var M = window.DPModel;
   var $ = function (id) { return document.getElementById(id); };
   var FIELDS = ['n', 'tmin', 'tmax', 'emin', 'emax', 'dur', 'seed', 'grab'];
@@ -141,6 +298,7 @@
     deadlock: { algo: 'naive',   n: 5,  tmin: 0,    tmax: 0,    emin: 300,  emax: 600,  dur: 8000,  seed: 1, grab: 300 }
   };
 
+  var destroyed = false;
   var events = [], snaps = [], running = false, live = true, view = 0, ctrl = null, endEvent = null;
   var renderQueued = false, curN = 5;
 
@@ -160,7 +318,7 @@
     document.querySelectorAll('[data-preset]').forEach(function (b) { b.disabled = d; });
     syncGrab();
   }
-  function showErrors(list) {
+  function showErrors(list) { if (destroyed) return;
     var ul = $('errors'); ul.textContent = '';
     list.forEach(function (m) { var li = document.createElement('li'); li.textContent = m; ul.appendChild(li); });
   }
@@ -172,41 +330,87 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
-  function draw(snap) {
-    var n = snap.states.length, cx = 230, cy = 230, R = 175;
-    var svg = $('table'); while (svg.firstChild) svg.removeChild(svg.firstChild);
+  /* ---------- SVG-ийн бүтцийг n өөрчлөгдөх үед л дахин байгуулж, бусад
+   * үед зөвхөн attribute-уудыг шинэчилнэ (элементийг устгаж дахин
+   * үүсгэхгүй) — ингэснээр дээрх CSS transition-ууд (cx/cy/fill/stroke)
+   * жинхэнэ smooth хөдөлгөөн болж харагдана; устгаад дахин зурвал CSS
+   * transition хэрэгждэггүй (шинэ элемент = "анхны утга"-гаасаа эхэлнэ). */
+  /* fork бүрийг <g transform="translate(..) rotate(..)"> дотор <line>-ээр
+   * зурна (local координат нь байрлалаасаа үл хамааран ТОГТМОЛ: (-len/2,0)-
+   * (len/2,0)). SVG2-т x1/y1/x2/y2 нь зарим хөтөч дээр CSS transition-д
+   * тогтвортой хариу өгдөггүй болох нь шалгалтаар батлагдсан (нэг хөтөч
+   * дээр fork бүр instant "үсэрч" 20px-ээс том алхмаар хөдөлж байсан) —
+   * харин transform бол бүх орчинд CSS-ээр найдвартай animate хийгддэг тул
+   * байрлал/эргэлтийг зөвхөн g.forkg-ийн transform-оор удирдана. */
+  var built = { n: -1, forks: [], forkGroups: [], forkLen: 0, phils: [], philTexts: [], philTitles: [], forkTitles: [], cx: 230, cy: 230, R: 175 };
+
+  function buildSvgStructure(n) {
+    var svg = $('table'), cx = built.cx, cy = built.cy;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
     svg.appendChild(svgEl('circle', { cx: cx, cy: cy, r: 118, fill: '#efe3cc', stroke: '#cdb98e', 'stroke-width': 2 }));
+    built.forks = []; built.forkGroups = []; built.forkTitles = []; built.phils = []; built.philTexts = []; built.philTitles = [];
+    built.forkLen = Math.max(8, Math.min(22, 120 * Math.sin(Math.PI / n) * 0.5));
+    for (var k = 0; k < n; k++) {
+      var g = svgEl('g', { 'class': 'forkg', transform: 'translate(' + cx + ',' + cy + ') rotate(0)' });
+      var line = svgEl('line', { x1: -built.forkLen / 2, y1: 0, x2: built.forkLen / 2, y2: 0,
+        stroke: M.COLORS.free, 'stroke-width': 4, 'stroke-linecap': 'round' });
+      var lt = svgEl('title', {}, 'fork ' + k);
+      line.appendChild(lt);
+      g.appendChild(line);
+      svg.appendChild(g);
+      built.forks.push(line); built.forkGroups.push(g); built.forkTitles.push(lt);
+    }
+    for (var i = 0; i < n; i++) {
+      var c = svgEl('circle', { cx: cx, cy: cy, r: 1, fill: M.COLORS.thinking, stroke: '#1f2933', 'stroke-width': 2 });
+      var ct = svgEl('title', {}, 'P' + i);
+      c.appendChild(ct);
+      svg.appendChild(c);
+      var t = svgEl('text', { x: cx, y: cy, 'text-anchor': 'middle', 'font-weight': 700, fill: '#fff', 'dominant-baseline': 'middle' }, 'P' + i);
+      svg.appendChild(t);
+      built.phils.push(c); built.philTexts.push(t); built.philTitles.push(ct);
+    }
+    built.n = n;
+  }
+
+  function draw(snap) {
+    var n = snap.states.length, cx = built.cx, cy = built.cy, R = built.R;
+    if (built.n !== n) buildSvgStructure(n);
     var pr = M.philRadius(n, R);
 
-    /* fork */
+    /* fork — байрлал/эргэлтийг g.forkg-ийн transform (CSS-ээр animate
+     * хийгддэг) дээр, өнгийг line-ийн stroke дээр тус тусад нь тавина. */
     for (var k = 0; k < n; k++) {
       var owner = snap.forks[k];
       var fp = M.forkPos(k, owner, n, cx, cy, 92, 142);
       var color = owner < 0 ? M.COLORS.free : M.COLORS[snap.states[owner]];
-      var len = Math.max(8, Math.min(22, 120 * Math.sin(Math.PI / n) * 0.5));
-      var dx = Math.cos(fp.angle) * len / 2, dy = Math.sin(fp.angle) * len / 2;
-      var line = svgEl('line', { x1: fp.x - dx, y1: fp.y - dy, x2: fp.x + dx, y2: fp.y + dy,
-        stroke: color, 'stroke-width': owner < 0 ? 4 : 6, 'stroke-linecap': 'round' });
-      line.appendChild(svgEl('title', {}, 'fork ' + k + (owner < 0 ? ': чөлөөтэй' : ': P' + owner + ' барьсан')));
-      svg.appendChild(line);
+      var deg = fp.angle * 180 / Math.PI;
+      built.forkGroups[k].setAttribute('transform', 'translate(' + fp.x + ',' + fp.y + ') rotate(' + deg + ')');
+      var line = built.forks[k];
+      line.setAttribute('stroke', color); line.setAttribute('stroke-width', owner < 0 ? 4 : 6);
+      built.forkTitles[k].textContent = 'fork ' + k + (owner < 0 ? ': чөлөөтэй' : ': P' + owner + ' барьсан');
     }
     /* philosopher */
     for (var i = 0; i < n; i++) {
       var pp = M.philPos(i, n, cx, cy, R), st = snap.states[i];
-      var c = svgEl('circle', { cx: pp.x, cy: pp.y, r: pr, fill: M.COLORS[st],
-        stroke: snap.deadlock ? '#d64545' : '#1f2933', 'stroke-width': snap.deadlock ? 4 : 2 });
-      c.appendChild(svgEl('title', {}, 'P' + i + ': ' + st));
-      svg.appendChild(c);
-      if (pr >= 13) {
-        svg.appendChild(svgEl('text', { x: pp.x, y: pp.y + 1, 'text-anchor': 'middle', 'font-size': Math.min(15, pr * 0.62),
-          'font-weight': 700, fill: '#fff', 'dominant-baseline': 'middle' }, 'P' + i));
-      }
+      var c = built.phils[i];
+      c.setAttribute('cx', pp.x); c.setAttribute('cy', pp.y); c.setAttribute('r', pr);
+      c.setAttribute('fill', M.COLORS[st]);
+      c.setAttribute('stroke', snap.deadlock ? '#d64545' : '#1f2933');
+      c.setAttribute('stroke-width', snap.deadlock ? 4 : 2);
+      built.philTitles[i].textContent = 'P' + i + ': ' + st;
+      var t = built.philTexts[i];
+      t.setAttribute('x', pp.x); t.setAttribute('y', pp.y + 1);
+      t.setAttribute('font-size', Math.min(15, pr * 0.62));
+      t.style.display = pr >= 13 ? '' : 'none';
     }
     var b = $('banner');
     if (snap.deadlock) { b.className = 'bad'; b.textContent = 'DEADLOCK — бүх philosopher зүүн fork-оо барьж, баруун fork-оо хүлээж байна'; }
     else if (snap.ended) { b.className = 'ok'; b.textContent = 'Ажиллагаа дууссан (' + snap.reason + ')'; }
     else { b.className = ''; b.textContent = running ? 'Ажиллаж байна…' : ''; }
     $('tinfo').textContent = 't = ' + snap.t + ' мс';
+    var pulse = $('livepulse');
+    pulse.classList.toggle('running', !!running);
+    $('pulsetxt').textContent = running ? 'Ажиллаж байна' : (snap.ended ? 'Дууссан' : 'Зогссон');
   }
 
   function renderLog(upto) {
@@ -234,7 +438,7 @@
     $('next').disabled = !has || live || view >= snaps.length - 1;
     $('live').disabled = !has || live;
   }
-  function render() {
+  function render() { if (destroyed) return;
     renderQueued = false;
     var idx = live ? snaps.length - 1 : view;
     draw(snaps[idx] || M.emptySnapshot(curN));
@@ -250,17 +454,18 @@
     events = []; endEvent = null; curN = n; snaps = [M.emptySnapshot(n)]; live = true; view = 0;
     renderStats(); scheduleRender();
   }
-  function setRunning(r) {
+  function setRunning(r) { if (destroyed) return;
     running = r; setInputsDisabled(r);
     $('start').disabled = r; $('stop').disabled = !r;
   }
-  function finish(msg) {
+  function finish(msg) { if (destroyed) return;
     setRunning(false); ctrl = null;
     $('status').textContent = msg || 'Дууссан.';
     scheduleRender();
   }
-  function handleLine(line) {
+  function handleLine(line) { if (destroyed) return;
     var ev; try { ev = JSON.parse(line); } catch (e) { return; }
+    if (ev.type === 'ping') return; /* сервер-клиент холболт шалгах дохио, дүрслэлд оролцохгүй */
     if (ev.type === 'exit') {
       if (ev.code === 2 && ev.stderr) showErrors([ev.stderr]);
       return;
@@ -328,14 +533,259 @@
   document.querySelectorAll('[data-preset]').forEach(function (b) {
     b.onclick = function () { writeForm(PRESETS[b.getAttribute('data-preset')]); showErrors([]); resetView(PRESETS[b.getAttribute('data-preset')].n); };
   });
-  document.addEventListener('keydown', function (e) {
+  function onKey(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     if (e.key === 'ArrowLeft') $('prev').click(); else if (e.key === 'ArrowRight') $('next').click();
-  });
+  }
+  document.addEventListener('keydown', onKey);
 
   writeForm(PRESETS.book);
   resetView(5);
+  return function destroy() {   /* дэлгэцээс гарахад ажиллаж буй run-ыг зогсооно */
+    destroyed = true;
+    document.removeEventListener('keydown', onKey);
+    if (ctrl) ctrl.abort();
+  };
+}
+
+(function(){
+'use strict';
+var NS='http://www.w3.org/2000/svg';
+function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e}
+var COL={thinking:'var(--think)',hungry:'var(--hungry)',eating:'var(--eat)'};
+var NAMES={thinking:'бодож байна',hungry:'өлсөж байна',eating:'идэж байна'};
+
+/* ---------- Table drawing: built once, updated in place so CSS transitions animate ---------- */
+function Table(svg,n){
+  var self=this;this.n=n;svg.innerHTML='';svg.setAttribute('viewBox','0 0 560 540');
+  var C=[280,270],Rt=152,Rp=110,Rph=208,Rarr=262,step=2*Math.PI/n;
+  this.ang=function(i){return -Math.PI/2+i*step};
+  this.angF=function(k){return -Math.PI/2+(k-.5)*step};
+  var P=function(a,r){return [C[0]+r*Math.cos(a),C[1]+r*Math.sin(a)]};this.P=P;this.Rp=Rp;
+  var pr=Math.min(36,2*Rph*Math.sin(Math.PI/n)*.3),plr=Math.min(30,2*Rp*Math.sin(Math.PI/n)*.36);
+  el('circle',{cx:C[0],cy:C[1],r:Rt,'class':'t-table'},svg);
+  el('circle',{cx:C[0],cy:C[1],r:62,'class':'t-inner'},svg);
+  this.food=[];this.forks=[];this.phils=[];this.rings=[];this.bubbles=[];this.arrowsG=null;
+  var i,k,p;
+  for(i=0;i<n;i++){p=P(this.ang(i),Rp);
+    el('circle',{cx:p[0],cy:p[1],r:plr,'class':'t-plate'},svg);
+    el('circle',{cx:p[0],cy:p[1],r:plr*.62,'class':'t-plate2'},svg);
+    var fg=el('g',{'class':'food'},svg);
+    for(var j=0;j<7;j++){var a=j*.9,rr=j%2?plr*.3:plr*.14;el('circle',{cx:p[0]+rr*Math.cos(a),cy:p[1]+rr*Math.sin(a),r:Math.max(2.5,plr*.14)},fg)}
+    this.food.push(fg)}
+  var sc=n>6?.8:1;
+  for(k=0;k<n;k++){var g=el('g',{'class':'fork'},svg);
+    el('path',{d:'M0,-3 L0,18 M-6,-18 L-6,-3 M0,-18 L0,-3 M6,-18 L6,-3 M-6,-3 Q0,5 6,-3','stroke-width':3.4,transform:'scale('+sc+')'},g);
+    var t=el('title',{},g);t.textContent='fork '+k;this.forks.push(g)}
+  /* deadlock arrows + centre label */
+  var d=Math.min(.33,step*.3),ag=el('g',{'class':'arrows'},svg);
+  for(i=0;i<n;i++){var a0=this.ang(i)+d,a1=this.ang(i)+step-d,q0=P(a0,Rarr),q1=P(a1,Rarr);
+    var ar=el('path',{d:'M'+q0[0]+','+q0[1]+' A'+Rarr+','+Rarr+' 0 0 1 '+q1[0]+','+q1[1],'marker-end':'url(#ah)'},ag)}
+  var defs=el('defs',{},svg),m=el('marker',{id:'ah',markerWidth:9,markerHeight:9,refX:7,refY:4.5,orient:'auto'},defs);
+  el('path',{d:'M0,0 L9,4.5 L0,9 z',style:'fill:var(--bad)'},m);
+  this.arrowsG=ag;
+  var cw=el('g',{'class':'cw'},svg);
+  var t1=el('text',{x:C[0],y:C[1]-2,'font-size':19,'font-weight':800,style:'fill:var(--bad)'},cw);t1.textContent='circular wait';
+  var t2=el('text',{x:C[0],y:C[1]+20,'font-size':13,style:'fill:var(--muted)'},cw);t2.textContent='бүгд бие биенээ хүлээж байна';
+  this.cw=cw;
+  for(i=0;i<n;i++){p=P(this.ang(i),Rph);
+    var ph=el('g',{'class':'phil',role:'img'},svg);
+    var ring=el('circle',{cx:p[0],cy:p[1],r:pr+9,'class':'ring'},ph);
+    el('circle',{cx:p[0],cy:p[1],r:pr,'class':'body'},ph);
+    var tx=el('text',{x:p[0],y:p[1]+pr*.19,'font-size':pr*.55},ph);tx.textContent='P'+i;
+    var side=p[0]>=C[0]?1:-1,bg=el('g',{'class':'bubble'},ph);
+    el('circle',{cx:p[0]+side*(pr*.9),cy:p[1]-pr*.75,r:3.5},bg);
+    el('circle',{cx:p[0]+side*(pr*1.15),cy:p[1]-pr*1.1,r:10},bg);
+    var dots=el('text',{x:p[0]+side*(pr*1.15),y:p[1]-pr*1.1+4,'text-anchor':'middle'},bg);dots.textContent='…';
+    this.phils.push(ph);this.rings.push(ring);this.bubbles.push(bg)}
+}
+Table.prototype.update=function(s){
+  var n=this.n,i,k;
+  for(i=0;i<n;i++){
+    var st=s.states[i],ph=this.phils[i],body=ph.querySelector('.body');
+    body.style.fill=COL[st];body.style.stroke=s.deadlock?'var(--bad)':'var(--ink)';body.style.strokeWidth=s.deadlock?'4.5':'2.5';
+    this.rings[i].setAttribute('class','ring'+(st==='hungry'?' hun':st==='eating'?' eat':''));
+    this.rings[i].style.stroke=COL[st];
+    this.bubbles[i].style.opacity=st==='thinking'?1:0;
+    this.food[i].style.opacity=st==='eating'?1:0;
+    ph.setAttribute('aria-label','P'+i+' '+NAMES[st]);
+  }
+  for(k=0;k<n;k++){var o=s.owner[k],a,col;
+    if(o<0){a=this.angF(k);col='var(--fork)'}
+    else{var a0=this.angF(k),a1=this.ang(o),d=Math.atan2(Math.sin(a1-a0),Math.cos(a1-a0));a=a0+d*.62;col=COL[s.states[o]]}
+    var p=this.P(a,this.Rp);
+    this.forks[k].style.transform='translate('+p[0].toFixed(1)+'px,'+p[1].toFixed(1)+'px) rotate('+(a*180/Math.PI+90).toFixed(1)+'deg)';
+    this.forks[k].querySelector('path').style.stroke=col;
+    this.forks[k].querySelector('title').textContent='fork '+k+(o<0?': чөлөөтэй':': P'+o+' барьсан');
+  }
+  this.arrowsG.style.opacity=s.arrows?1:0;this.cw.style.opacity=s.arrows?1:0;
+};
+Table.prototype.onClick=function(cb){var self=this;this.phils.forEach(function(g,i){
+  g.classList.add('click');g.setAttribute('tabindex','0');g.setAttribute('role','button');
+  g.addEventListener('click',function(){cb(i)});
+  g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();cb(i)}});})};
+
+function mkState(n){var s=[],o=[];for(var i=0;i<n;i++){s.push('thinking');o.push(-1)}return {states:s,owner:o,arrows:false,deadlock:false}}
+function stageHTML(extra,top){return '<div class="stage">'+(top||'')+'<svg role="group" aria-label="Дугуй ширээ, philosopher болон fork"></svg><div class="banner"></div>'+
+ '<div class="legend"><span><i style="background:var(--think)"></i>thinking</span><span><i style="background:var(--hungry)"></i>hungry</span><span><i style="background:var(--eat)"></i>eating</span></div>'+(extra||'')+'</div>'}
+
+/* ---------- Simulation (monitor / naive), small seeded scheduler ---------- */
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function Sim(n,mode){this.n=n;this.mode=mode;this.r=rng(mode==='monitor'?7+n:(Date.now()+n*131)|0);this.reset()}
+Sim.prototype.reset=function(){this.now='';this.narr=[];this.leftAt=[];var m=mkState(this.n);this.s=m;this.t=0;this.meals=[];this.since=[];this.log=[];for(var i=0;i<this.n;i++){this.meals.push(0);this.since.push(0)}};
+Sim.prototype.nar=function(x){this.narr.push(x)};
+Sim.prototype.say=function(x){this.log.push('t='+this.t+'  '+x);if(this.log.length>40)this.log.shift()};
+Sim.prototype.tick=function(){
+  if(this.s.deadlock)return;
+  var n=this.n,s=this.s,r=this.r,i,L=function(i){return i},R=function(i){return (i+1)%n};
+  this.t++;this.narr=[];
+  var off=Math.floor(r()*n);
+  if(this.mode==='monitor'){
+    for(var q=0;q<n;q++){i=(q+off)%n;
+      if(s.states[i]==='eating'&&r()<.4){s.states[i]='thinking';s.owner[i]=-1;s.owner[R(i)]=-1;this.say('P'+i+' → thinking (fork '+i+', '+R(i)+' тавьсан)');this.nar('P'+i+' идэж дуусаад fork '+i+', '+R(i)+'-ийг тавилаа. Хөрш нь одоо идэж болно.')}}
+    for(q=0;q<n;q++){i=(q+off)%n;
+      if(s.states[i]==='thinking'&&r()<.35){s.states[i]='hungry';this.since[i]=this.t;this.say('P'+i+' → hungry');this.nar('P'+i+' өлслөө. Хоёр хөрш нь идэхгүй байвал идэж эхэлнэ.')}}
+    var h=[];for(i=0;i<n;i++)if(s.states[i]==='hungry')h.push(i);
+    var self=this;h.sort(function(a,b){return self.since[a]-self.since[b]});
+    h.forEach(function(i){var l=(i+n-1)%n,rr=R(i);
+      if(s.states[l]!=='eating'&&s.states[rr]!=='eating'){s.states[i]='eating';s.owner[i]=i;s.owner[rr]=i;self.meals[i]++;self.say('P'+i+' → eating (fork '+i+', '+rr+' авсан)');self.nar('P'+i+': хоёр хөрш нь идэхгүй тул fork '+i+', '+rr+'-ийг зэрэг аваад идэж эхэллээ.')}
+      else{var w=s.states[l]==='eating'?l:rr;self.nar('P'+i+' хүлээж байна: P'+w+' идэж байгаа тул нэг fork нь завгүй.')}});
+  }else{
+    for(var q2=0;q2<n;q2++){i=(q2+off)%n;var st=s.states[i];
+      if(st==='eating'){ if(r()<.4){s.states[i]='thinking';s.owner[i]=-1;s.owner[R(i)]=-1;this.say('P'+i+' → thinking (fork-уудаа тавьсан)');this.nar('P'+i+' идэж дуусаад хоёр fork-оо тавилаа.')} }
+      else if(st==='thinking'){ if(r()<.6){s.states[i]='hungry';this.say('P'+i+' → hungry');this.nar('P'+i+' өлслөө. Эхлээд зүүн fork-оо авна.')} }
+      else if(s.owner[i]!==i){ if(s.owner[i]===-1){s.owner[i]=i;this.leftAt[i]=this.t;this.say('P'+i+' зүүн fork '+i+'-ийг авлаа');this.nar('P'+i+' зүүн fork '+i+'-ийг авлаа. Одоо баруун fork '+R(i)+'-ийг хүлээнэ.')} }
+      else if(this.t-this.leftAt[i]>=3&&s.owner[R(i)]===-1){s.owner[R(i)]=i;s.states[i]='eating';this.meals[i]++;this.say('P'+i+' → eating (fork '+i+', '+R(i)+')');this.nar('P'+i+' баруун fork '+R(i)+'-ийг ч авлаа. Хоёр fork-той тул идэж байна.')}
+      else if(s.owner[i]===i&&s.owner[R(i)]!==-1&&s.owner[R(i)]!==i)this.nar('P'+i+' зүүн fork-оо барьсан хэвээр: баруун fork '+R(i)+' P'+s.owner[R(i)]+'-ийн гарт байна.')
+    }
+    var dead=true;for(i=0;i<n;i++)if(s.states[i]!=='hungry'||s.owner[i]!==i)dead=false;
+    if(dead){s.deadlock=true;s.arrows=true;this.say('DEADLOCK: бүгд зүүн fork-оо барьж, баруун fork-оо хүлээж байна');this.nar('DEADLOCK: хүн бүр зүүн fork-оо барьж, баруун fork-оо хүлээж байна. Хэн ч fork тавихгүй тул хэн ч урагшлахгүй.')}
+  }
+  var shown=this.narr.filter(function(x){return x.indexOf('хүлээж байна:')<0||true});
+  this.now=s.deadlock?shown[shown.length-1]:(shown.length?shown.slice(0,2).join(' '):'Энэ алхамд өөрчлөлт болсонгүй.');
+};
+
+/* ---------- Sim panel (meals + log) ---------- */
+function nowHTML(){return '<div class="msg" id="now"><b>Яг одоо:</b> <span></span></div>'}
+function panelHTML(){return '<div class="panel"><div class="meals" id="meals"></div><div class="log" id="log" aria-label="Event лог"></div></div>'}
+function drawPanel(root,sim){
+  var m=root.querySelector('#meals'),mx=1,i;sim.meals.forEach(function(v){if(v>mx)mx=v});
+  if(m.children.length!==sim.n){m.innerHTML='';for(i=0;i<sim.n;i++){var r=document.createElement('div');r.className='r';r.innerHTML='<b>P'+i+'</b><span class="bar"><span></span></span><span class="v"></span>';m.appendChild(r)}}
+  for(i=0;i<sim.n;i++){var row=m.children[i];row.querySelector('.bar span').style.width=(sim.meals[i]/mx*100)+'%';row.querySelector('.v').textContent=sim.meals[i]+' удаа'}
+  var lg=root.querySelector('#log');lg.innerHTML='';sim.log.slice(-6).forEach(function(x){var d=document.createElement('div');d.textContent=x;lg.appendChild(d)});
+  var nw=root.querySelector('#now span');if(nw)nw.textContent=sim.now||'Эхлэхэд бүх philosopher бодож байна.';
+  var b=root.querySelector('.banner');
+  if(sim.s.deadlock){b.className='banner bad';b.textContent='DEADLOCK — хэн ч урагшлах боломжгүй'}else{b.className='banner';b.textContent=''}
+}
+
+/* ---------- Screens ---------- */
+var timers=[];
+function clearTimers(){timers.forEach(clearInterval);timers=[]}
+function $(r,s){return r.querySelector(s)}
+
+var SCREENS=[
+{id:'intro',tab:'Танилцуулга',mount:function(root){
+  root.innerHTML='<section class="copy"><h1>Dining Philosophers гэж юу вэ?</h1>'+
+  '<p class="lead">Таван philosopher дугуй ширээний ойр суужээ. Хүн бүрийн өмнө хавтан, хавтан хооронд нэг ширхэг fork байна.</p>'+
+  '<p>Тэд бодож, өлсөж, идэх гурван үйлдлийг дарааллаар давтана. Идэхийн тулд <b>зүүн, баруун хоёр fork-оо хоёуланг нь</b> авах ёстой.</p>'+
+  '<h2>Яагаад хэцүү вэ?</h2><p>Таван fork-ийг таван хүн хуваалцаж байна. Зөв зохион байгуулахгүй бол хүн бүр нэг fork барьчихаад нөгөөг нь хүлээж гацна (<b>deadlock</b>). Эсвэл нэг нь хэзээ ч идэж чадахгүй үлдэнэ (<b>starvation</b>).</p>'+
+  '<h2>Үйлдлийн системд яагаад чухал вэ?</h2><p>Philosopher нь thread, fork нь thread-үүдийн хуваалцдаг нөөц (түгжээ, файл, санах ой). Хэд хэдэн thread нөөцийг хэрхэн аюулгүй хуваах вэ гэдэг асуултыг энэ жишээ нэг ширээн дээр харуулдаг.</p>'+
+  '<ul class="facts"><li>5 philosopher</li><li>5 fork</li><li>2 fork шаардана</li></ul></section>'+stageHTML();
+  var t=new Table($(root,'svg'),5),s=mkState(5);
+  s.states=['eating','thinking','hungry','thinking','thinking'];s.owner=[0,0,-1,-1,-1];
+  t.update(s);
+}},
+{id:'rules',tab:'Дүрэм',mount:function(root){
+  root.innerHTML='<section class="copy"><h1>Гурван төлөв, нэг дүрэм</h1>'+
+  '<ul class="flow"><li><i style="background:var(--think)"></i><span><b>thinking</b> — бодож байна. Fork хэрэггүй.</span></li>'+
+  '<li><i style="background:var(--hungry)"></i><span><b>hungry</b> — өлсөж, fork хүлээж байна.</span></li>'+
+  '<li><i style="background:var(--eat)"></i><span><b>eating</b> — хоёр fork-той, идэж байна. Дууссаны дараа fork-оо тавьж thinking болно.</span></li></ul>'+
+  '<div class="rule"><b>Дүрэм</b>Идэхийн тулд зүүн, баруун хоёр fork чөлөөтэй байх ёстой. Зэргэлдээ хоёр philosopher зэрэг идэж чадахгүй.</div>'+
+  '<h2>Өөрөө туршиж үз</h2><p class="muted">Philosopher дээр дарж төлөвийг нь шилжүүл: thinking → hungry → eating → thinking. P0-г идүүлээд, дараа нь P1-ийг идүүлж үз.</p></section>'+
+  stageHTML('<div class="msg" id="msg">Philosopher дээр дарна уу.</div>');
+  var n=5,t=new Table($(root,'svg'),n),s=mkState(n),msg=$(root,'#msg');
+  function sync(){s.owner=s.owner.map(function(){return -1});s.states.forEach(function(x,i){if(x==='eating'){s.owner[i]=i;s.owner[(i+1)%n]=i}});t.update(s)}
+  t.onClick(function(i){var st=s.states[i],l=(i+n-1)%n,r=(i+1)%n;msg.className='msg';
+    if(st==='thinking'){s.states[i]='hungry';msg.textContent='P'+i+' өлслөө. Fork '+i+' ба fork '+r+'-ийг хүлээж байна.'}
+    else if(st==='hungry'){
+      if(s.states[l]==='eating'||s.states[r]==='eating'){var who=s.states[l]==='eating'?l:r;msg.className='msg bad';msg.textContent='P'+i+' идэж чадахгүй: P'+who+' идэж байгаа тул нэг fork нь завгүй. P'+i+' hungry хэвээр хүлээнэ.'}
+      else{s.states[i]='eating';msg.textContent='P'+i+' fork '+i+', fork '+r+'-ийг хоёуланг нь аваад идэж байна.'}}
+    else{s.states[i]='thinking';msg.textContent='P'+i+' fork-уудаа тавиад дахин бодож байна.'}
+    sync()});
+  sync();
+}},
+{id:'deadlock',tab:'Deadlock',mount:function(root){
+  var n=5,STEPS=[];
+  STEPS.push('Бүх philosopher бодож байна. 5 fork ширээн дээр чөлөөтэй.');
+  for(var k=1;k<=5;k++)STEPS.push('P'+(k-1)+' өлсөөд зүүн fork-оо (fork '+(k-1)+') авлаа.'+(k===5?' Одоо баруун fork бүр хөршийнх нь гарт байна.':''));
+  STEPS.push('P0 нь P1-ийг, P1 нь P2-ыг, … P4 нь P0-г хүлээж байна. Хэн ч fork тавихгүй тул хэн ч идэж чадахгүй. Энэ бол deadlock.');
+  root.innerHTML='<section class="copy"><h1>Бүгд зүүн fork-оо авбал юу болох вэ?</h1>'+
+  '<p>Хамгийн энгийн арга: хүн бүр эхлээд зүүн fork-оо, дараа нь баруун fork-оо авна. Алхам алхмаар харна уу.</p>'+
+  '<div class="steptext" id="st"></div><div class="ctl"><button class="btn p" id="go">Алхам ▶</button><button class="btn" id="rs">Эхнээс</button></div>'+
+  '<div id="conds" hidden><h2>Deadlock үүсэх дөрвөн нөхцөл</h2><ul class="conds">'+
+  '<li><b>Mutual exclusion</b><em>fork нэг л хүнд</em></li><li><b>Hold and wait</b><em>нэг fork барьж, нөгөөг хүлээнэ</em></li>'+
+  '<li><b>No preemption</b><em>fork-ийг хүчээр авч болохгүй</em></li><li class="hit"><b>Circular wait</b><em>тойрог хэлбэрээр хүлээнэ (зураг дээрх улаан сум)</em></li></ul></div></section>'+stageHTML();
+  var t=new Table($(root,'svg'),n),k0=0;
+  function show(){var s=mkState(n);for(var i=0;i<n;i++)if(i<Math.min(k0,5)){s.states[i]='hungry';s.owner[i]=i}
+    s.arrows=k0>=6;s.deadlock=k0>=6;t.update(s);$(root,'#st').textContent=STEPS[k0];
+    $(root,'#go').disabled=k0>=6;$(root,'#conds').hidden=k0<6;
+    var b=$(root,'.banner');b.className=k0>=6?'banner bad':'banner';b.textContent=k0>=6?'DEADLOCK':''}
+  $(root,'#go').onclick=function(){if(k0<6){k0++;show()}};
+  $(root,'#rs').onclick=function(){k0=0;show()};
+  show();
+}},
+{id:'monitor',tab:'Шийдэл',mount:function(root){
+  var n=5;
+  root.innerHTML='<section class="copy"><h1>Шийдэл: хоёр fork-ийг зэрэг авах</h1>'+
+  '<p class="lead">Fork-ийг нэг нэгээр нь биш, хоёуланг нь нэг дор авна. Хоёр хөрш нь идэхгүй байвал л идэж эхэлнэ.</p>'+
+  '<pre class="code">test(i):\n  if state[i] == HUNGRY\n     and state[left]  != EATING\n     and state[right] != EATING:\n       state[i] = EATING</pre>'+
+  '<p>Нэг fork барьчихаад нөгөөг хүлээх нөхцөл (hold and wait) байхгүй болох тул deadlock үүсэхгүй. Сурах бичгийн monitor шийдэл нь mutex ба condition variable ашиглан үүнийг хэрэгжүүлдэг.</p>'+
+  '<p class="muted">Анхаар: энэ нь starvation-аас бүрэн хамгаалдаггүй. Нэг philosopher-ийн хөршүүд үргэлж ээлжлэн идвэл тэр хүлээсээр үлдэх онолын боломж бий.</p>'+
+  '<div class="ctl"><button class="btn p" id="pl">Түр зогсоох</button><button class="btn" id="stp">1 алхам</button></div>'+
+  '<p class="note">Энэ бол жижиг загвар. Одоо жинхэнэ C программаар (<code>build/dp</code>) туршиж үзье.</p>'+
+  '<div class="ctl"><button class="btn p" id="gor">Бодит туршилт руу →</button></div></section>'+
+  stageHTML(panelHTML(),nowHTML());
+  var t=new Table($(root,'svg'),n),sim=new Sim(n,'monitor'),playing=true;
+  function draw(){t.update(sim.s);drawPanel(root,sim)}
+  function tick(){sim.tick();draw()}
+  for(var i=0;i<4;i++)sim.tick();draw();
+  timers.push(setInterval(function(){if(playing)tick()},800));
+  $(root,'#pl').onclick=function(){playing=!playing;this.textContent=playing?'Түр зогсоох':'Үргэлжлүүлэх'};
+  $(root,'#stp').onclick=function(){playing=false;$(root,'#pl').textContent='Үргэлжлүүлэх';tick()};
+  $(root,'#gor').onclick=function(){go(SCREENS.length-1)};
+}},
+
+{id:'real',tab:'Бодит туршилт',wide:true,mount:function(root){return mountReal(root)}}
+];
+
+
+/* ---------- Navigation ---------- */
+var cur=0,cleanup=null,root=document.getElementById('screen'),tabs=document.getElementById('tabs');
+SCREENS.forEach(function(s,i){var li=document.createElement('li'),b=document.createElement('button');b.type='button';b.innerHTML='<i>'+(i+1)+'</i>'+s.tab;b.onclick=function(){go(i)};li.appendChild(b);tabs.appendChild(li)});
+function go(i,noHash){
+  if(i<0||i>=SCREENS.length)return;
+  clearTimers();if(cleanup){cleanup();cleanup=null}
+  cur=i;root.innerHTML='';root.className='screen'+(SCREENS[i].wide?' wide':'');
+  cleanup=SCREENS[i].mount(root)||null;
+  Array.prototype.forEach.call(tabs.querySelectorAll('button'),function(b,j){
+    if(j===i)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');b.classList.toggle('done',j<i)});
+  document.getElementById('navback').disabled=i===0;
+  var nx=document.getElementById('navnext');nx.textContent=i===SCREENS.length-1?'Эхнээс нь ↺':'Дараагийн →';
+  document.getElementById('navwhere').textContent=(i+1)+' / '+SCREENS.length+' · '+SCREENS[i].tab;
+  document.title='Dining Philosophers — '+SCREENS[i].tab;
+  if(!noHash){try{history.replaceState(null,'','#'+SCREENS[i].id)}catch(e){location.hash=SCREENS[i].id}}
+  window.scrollTo(0,0);
+}
+document.getElementById('navback').onclick=function(){go(cur-1)};
+document.getElementById('navnext').onclick=function(){go(cur===SCREENS.length-1?0:cur+1)};
+document.addEventListener('keydown',function(e){var tg=e.target.tagName;if(tg==='SELECT'||tg==='INPUT')return;
+  if(SCREENS[cur].id==='real')return;   /* бодит туршилтын дэлгэцэд ←/→ нь replay-д ашиглагдана */
+  if(e.key==='ArrowRight')go(Math.min(cur+1,SCREENS.length-1));else if(e.key==='ArrowLeft')go(cur-1)});
+function fromHash(){var h=(location.hash||'').slice(1),i=SCREENS.findIndex(function(s){return s.id===h});return i<0?0:i}
+window.addEventListener('hashchange',function(){var i=fromHash();if(i!==cur)go(i,true)});
+go(fromHash(),true);
 })();
+
 </script>
 </body>
 </html>

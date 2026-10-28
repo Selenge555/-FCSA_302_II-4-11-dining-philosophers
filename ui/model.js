@@ -65,6 +65,13 @@
       deadlock: snap.deadlock, ended: snap.ended, reason: snap.reason
     };
     if (ev.type === 'state') {
+      /* dp deadlock илрүүлсний дараа thread-үүдээ зогсоохдоо fork-уудаа
+       * суллаж "cleanup" state event гаргадаг (src/dp.c). Эдгээр нь deadlock
+       * ҮҮСЭЖ БАЙСАН мөчийн зургийг (бүх fork барьцаалагдсан) эвдэж, эцсийн
+       * snapshot дээр "DEADLOCK" баннертай ч fork бүр чөлөөтэй харагддаг
+       * байсан. Тиймээс deadlock тэмдэглэгдсэний дараах state event-үүд
+       * snapshot-ийг өөрчлөхгүй (event лог болон replay-д харин үлдэнэ). */
+      if (snap.deadlock) return next;
       next.t = ev.t;
       next.states[ev.id] = ev.state;
       next.forks = ev.forks.slice();
@@ -109,11 +116,34 @@
     return { x: cx + rHeld * Math.cos(a), y: cy + rHeld * Math.sin(a), angle: a, held: true };
   }
 
+  /* event.forks[k] бол fork k-г барьж буй philosopher-ийн id (чөлөөтэй бол -1).
+   * 'eating' болоход аль ХОЁР fork-ыг авсныг, ямар ч төлөвт аль fork(ууд)-ыг
+   * одоо барьж байгааг логоос ялгаж харуулна (жишээ нь naive-д ижил
+   * "P1 → hungry" хоёр удаа дараалан гарахад аль fork-ыг хүлээж буйг
+   * мэдэхийн тулд). */
+  function heldForksOf(ev) {
+    var held = [];
+    if (!ev.forks) return held;
+    for (var k = 0; k < ev.forks.length; k++) if (ev.forks[k] === ev.id) held.push(k);
+    return held;
+  }
   function describeEvent(ev) {
-    if (ev.type === 'state') return 't=' + ev.t + ' мс  P' + ev.id + ' → ' + ev.state;
+    if (ev.type === 'state') {
+      var base = 't=' + ev.t + ' мс  P' + ev.id + ' → ' + ev.state;
+      var held = heldForksOf(ev);
+      if (ev.state === 'eating' && held.length) {
+        base += ' (fork ' + held.join(',') + ' авсан)'; /* богино хэлбэр: event лог (#log) дэлгэцнээс гарахгүйн тулд */
+      } else if (ev.state === 'hungry' && held.length) {
+        base += ' (fork ' + held.join(',') + '-г авсан, нөгөөг хүлээж байна)';
+      } else if (ev.state === 'thinking') {
+        base += ' (fork-уудаа тавьсан)';
+      }
+      return base;
+    }
     if (ev.type === 'deadlock') return 't=' + ev.t + ' мс  DEADLOCK илэрлээ';
     if (ev.type === 'end') return 't=' + ev.t + ' мс  дууссан (' + ev.reason + ')';
     if (ev.type === 'config') return 'тохиргоо: ' + ev.algorithm + ', n=' + ev.n;
+    if (ev.type === 'ping') return null; /* сервер-клиент холболт шалгах дохио, лог/snapshot-д оролцдоггүй */
     return JSON.stringify(ev);
   }
 

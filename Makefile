@@ -24,7 +24,7 @@ tsan: src/dp.c
 	$(CC) -std=gnu11 -Wall -Wextra -g -O1 -fsanitize=thread $< -o build/dp_tsan $(LDFLAGS)
 
 # valgrind helgrind + leak-check (суулгасан байх шаардлагатай: sudo apt install
-# valgrind). Анхаар: `make test`/run_tests.sh-ийн автомат 16 тестэд ОРОХГҮЙ,
+# valgrind). Анхаар: `make test`/run_tests.sh-ийн автомат 19 тестэд ОРОХГҮЙ,
 # гар аргаар тусад нь ажиллуулдаг нэмэлт шалгалт. Monitor БА naive хоёуланд нь
 # ажиллуулдаг (naive-ийг зориуд grab-delay>0-той, богино хугацаагаар туршина).
 # --error-exitcode=99 заавал хэрэгтэй: naive тохиргоо нь санаатайгаар deadlock-д
